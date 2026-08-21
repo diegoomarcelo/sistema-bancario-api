@@ -1,17 +1,11 @@
 package br.com.diego.sistema_bancario_api.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import jakarta.persistence.Id;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.persistence.Column;
+import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.CascadeType;
-import java.util.List;
+import jakarta.validation.constraints.NotBlank;
+
 import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "clientes")
