@@ -186,6 +186,5 @@ Toda a API foi validada manualmente via **HTTP Client do IntelliJ**, cobrindo o 
 
 - Testes automatizados (JUnit + Mockito) para a camada de serviço.
 - Tratamento global de exceções (`@ControllerAdvice`) para respostas de erro padronizadas (atualmente os erros de validação retornam stack trace bruto).
-- Documentação interativa da API com Swagger/OpenAPI.
 - Possível interface front-end (React) consumindo a API.
 - Migração de `ddl-auto=update` para uma ferramenta de migração de schema (Flyway ou Liquibase), mais adequada para produção.
