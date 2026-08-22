@@ -13,3 +13,36 @@ GET http://localhost:8080/clientes
 
 ### Buscar cliente por id
 GET http://localhost:8080/clientes/1
+
+### Criar conta para o cliente 1
+POST http://localhost:8080/contas/clientes/1
+Content-Type: application/json
+
+{
+  "numero": "00001",
+  "tipo": "CORRENTE"
+}
+
+### Listar contas do cliente 1
+GET http://localhost:8080/contas/clientes/1
+
+### Depositar 500 na conta 1
+POST http://localhost:8080/contas/1/depositar
+Content-Type: application/json
+
+500.00
+
+### Sacar 150 da conta 1
+POST http://localhost:8080/contas/1/sacar
+Content-Type: application/json
+
+150.00
+
+### Ver extrato da conta 1
+GET http://localhost:8080/contas/1/extrato
+
+### Tentar sacar mais do que o saldo (deve dar erro)
+POST http://localhost:8080/contas/1/sacar
+Content-Type: application/json
+
+99999.00
