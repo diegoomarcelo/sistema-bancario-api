@@ -1,0 +1,15 @@
+### Criar cliente
+POST http://localhost:8080/clientes
+Content-Type: application/json
+
+{
+  "nome": "Diego Marcelo",
+  "cpf": "12345678900",
+  "email": "diego@teste.com"
+}
+
+### Listar todos os clientes
+GET http://localhost:8080/clientes
+
+### Buscar cliente por id
+GET http://localhost:8080/clientes/1
