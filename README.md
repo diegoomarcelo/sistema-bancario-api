@@ -1,190 +1,174 @@
-# Sistema Bancário API
+<h1 align="center">Sistema Bancário API</h1>
 
-API REST desenvolvida em **Java + Spring Boot**, portando a lógica de negócio de um sistema bancário que eu já havia desenvolvido anteriormente em Python (orientado a objetos). O objetivo foi aplicar os mesmos conceitos de POO em um novo ecossistema, aprofundando conhecimento em Java, Spring Boot, JPA/Hibernate e boas práticas de arquitetura de APIs REST.
+<p align="center">
+  <b>API REST de contas e transações bancárias com consistência transacional, em Java 21 e Spring Boot.</b>
+</p>
 
-Repositório: [github.com/diegoomarcelo/sistema-bancario-api](https://github.com/diegoomarcelo/sistema-bancario-api)
+<p align="center">
+  <img src="https://img.shields.io/badge/status-concluído-2ea44f?style=flat-square" alt="Status">
+  <img src="https://img.shields.io/badge/Java-21-ED8B00?style=flat-square&logo=openjdk&logoColor=white" alt="Java 21">
+  <img src="https://img.shields.io/badge/Spring_Boot-4.1-6DB33F?style=flat-square&logo=springboot&logoColor=white" alt="Spring Boot">
+  <img src="https://img.shields.io/badge/MySQL-8-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL">
+  <img src="https://img.shields.io/badge/testes-JUnit_5_+_Mockito-25A162?style=flat-square&logo=junit5&logoColor=white" alt="Testes">
+</p>
 
----
-
-## Tecnologias utilizadas
-
-| Categoria | Tecnologia |
-|---|---|
-| Linguagem | Java 21 |
-| Framework | Spring Boot 4.1.0 |
-| Persistência | Spring Data JPA / Hibernate |
-| Banco de dados | MySQL 8 |
-| Build | Maven |
-| Validação | Jakarta Bean Validation |
-| Serialização JSON | Jackson |
-| IDE | IntelliJ IDEA Community |
-| Testes manuais | HTTP Client nativo do IntelliJ |
-| Versionamento | Git / GitHub |
+<p align="center">
+  <a href="#-como-rodar-localmente">Rodar localmente</a> ·
+  <a href="#-endpoints">Endpoints</a> ·
+  <a href="#-decisões-técnicas">Decisões técnicas</a>
+</p>
 
 ---
 
-## Arquitetura
+## 🎯 O problema
 
-O projeto segue a arquitetura em camadas padrão do Spring Boot:
+Eu já tinha um sistema bancário orientado a objetos em Python ([sistema_bancario](https://github.com/diegoomarcelo/sistema_bancario)), rodando só em memória. A proposta foi portar essas mesmas regras de negócio para uma **API REST com persistência real**, onde o desafio deixa de ser só "calcular o saldo" e passa a ser **garantir que saldo e extrato nunca fiquem inconsistentes**, mesmo se uma operação falhar no meio.
+
+## ✅ A solução
+
+Uma API em camadas (Controller → Service → Repository) que gerencia clientes, contas e movimentações, com validação de entrada, tratamento global de erros e testes unitários das regras de negócio.
+
+**Principais funcionalidades**
+
+- Cadastra clientes e bloqueia CPF duplicado (na regra de negócio e por constraint no banco).
+- Abre contas dos tipos corrente, poupança, salário e investimento, vinculadas a um cliente.
+- Realiza depósitos e saques com validação de valor positivo e de saldo suficiente.
+- Registra cada movimentação e devolve o extrato da conta.
+- Retorna erros de regra de negócio como `400 Bad Request` com mensagem clara, em vez de stack trace.
+
+## 📸 Demonstração
+
+Exemplo de fluxo completo (o arquivo [`testes.http`](testes.http) tem todas as requisições prontas para o HTTP Client do IntelliJ):
+
+```http
+### 1. Criar cliente
+POST http://localhost:8080/clientes
+Content-Type: application/json
+
+{ "nome": "Maria Silva", "cpf": "12345678900", "email": "maria@email.com" }
+
+### 2. Abrir conta para o cliente 1
+POST http://localhost:8080/contas/clientes/1
+Content-Type: application/json
+
+{ "numero": "0001-1", "tipo": "CORRENTE", "saldo": 0 }
+
+### 3. Depositar R$ 500,00
+POST http://localhost:8080/contas/1/depositar
+Content-Type: application/json
+
+500.00
+
+### 4. Tentar sacar mais do que o saldo → 400 Bad Request
+POST http://localhost:8080/contas/1/sacar
+Content-Type: application/json
+
+800.00
+
+### 5. Consultar extrato
+GET http://localhost:8080/contas/1/extrato
+```
+
+<!-- Sugestão: adicione aqui um GIF curto (docs/img/demo.gif) rodando essas requisições no IntelliJ ou no Postman. -->
+
+## 🛠️ Tecnologias
+
+| Camada | Tecnologia | Por que escolhi |
+|---|---|---|
+| Linguagem | Java 21 | Tipagem forte e o ecossistema mais usado em sistemas financeiros; objetivo do projeto era aprender a stack. |
+| Framework | Spring Boot 4.1 | Injeção de dependência e configuração automática deixam o foco nas regras de negócio. |
+| Persistência | Spring Data JPA / Hibernate | Mapeamento objeto-relacional e *query methods* sem SQL manual. |
+| Banco de dados | MySQL 8 | Os dados são relacionais por natureza (cliente → conta → transação) e precisam de integridade referencial. |
+| Validação | Jakarta Bean Validation | Regras de entrada declaradas na entidade (`@NotBlank`, `@Email`, `@NotNull`) e acionadas com `@Valid`. |
+| Testes | JUnit 5 + Mockito | Testar as regras do `ContaService` isoladas do banco, de forma rápida e determinística. |
+| Build | Maven (wrapper incluso) | Roda sem instalar Maven na máquina: `./mvnw`. |
+
+## 🧱 Arquitetura
+
+```mermaid
+flowchart LR
+    U[Cliente HTTP] -->|JSON| C[Controller<br/>Cliente · Conta · Transação]
+    C --> S[Service<br/>regras de negócio<br/>@Transactional]
+    S --> R[Repository<br/>Spring Data JPA]
+    R --> DB[(MySQL)]
+    C -. erros .-> H[GlobalExceptionHandler<br/>@ControllerAdvice]
+```
+
+**Modelo de dados:** `Cliente 1 ── N Conta 1 ── N Transacao`
+
+**Estrutura de pastas**
 
 ```
-Controller → Service → Repository → Banco de Dados (MySQL)
+src/main/java/br/com/diego/sistema_bancario_api/
+├── controller/   # endpoints REST, sem regra de negócio
+├── service/      # regras: CPF único, saldo suficiente, valor positivo
+├── repository/   # interfaces JpaRepository + query methods
+├── model/        # entidades JPA e enums (TipoConta, TipoTransacao)
+└── exception/    # GlobalExceptionHandler
+src/test/java/.../service/ContaServiceTest.java
+testes.http       # requisições prontas para testes manuais
 ```
 
-- **`model`** — entidades JPA que representam as tabelas do banco.
-- **`repository`** — interfaces `JpaRepository`, responsáveis pelo acesso a dados (sem SQL manual).
-- **`service`** — regras de negócio (validações, cálculos, orquestração entre entidades).
-- **`controller`** — endpoints REST, responsáveis por receber requisições HTTP e devolver respostas.
+## 💡 Decisões técnicas
 
-Essa separação garante que cada camada tenha uma responsabilidade única, facilitando manutenção e testes.
+- **`BigDecimal` para valores monetários**, comparados com `.compareTo()`: `double`/`float` geram erros de arredondamento inaceitáveis em dinheiro. *Trade-off:* código mais verboso nas operações aritméticas.
+- **`@Transactional` em depósito e saque**: atualizar o saldo e registrar a transação acontecem juntos ou não acontecem (rollback automático em caso de falha). Foi o principal problema que o projeto se propôs a resolver.
+- **Relacionamento unidirecional `Transacao → Conta`**: a `Conta` não carrega a lista de transações, para não trazer um histórico potencialmente grande a cada consulta. O extrato é buscado sob demanda (`findByContaId`).
+- **Unicidade em duas camadas**: o serviço verifica CPF duplicado antes de salvar, e `@Column(unique = true)` no banco é a última linha de defesa contra condições de corrida.
+- **`@JsonManagedReference` / `@JsonBackReference`** em `Cliente ↔ Conta`: resolve o loop infinito de serialização do relacionamento bidirecional.
+- **Senha do banco via variável de ambiente** (`${DB_PASSWORD}`): o repositório pode ser público sem expor credenciais.
 
----
+## 🧪 Testes
 
-## Modelagem de dados
+| Tipo | Ferramenta | Quantidade | O que cobre |
+|---|---|---|---|
+| Unitários | JUnit 5 + Mockito | 5 | `ContaService`: depósito e saque com sucesso, saldo insuficiente, valor zero/negativo, conta inexistente |
+| Manuais | HTTP Client (IntelliJ) | fluxo completo | Cadastro, abertura de conta, movimentações, bloqueios e extrato ([`testes.http`](testes.http)) |
 
-### Entidades
-
-**`Cliente`**
-- `id`, `nome`, `cpf` (único), `email`
-- Relacionamento `@OneToMany` com `Conta`
-
-**`Conta`**
-- `id`, `numero` (único), `tipo` (enum `TipoConta`: `CORRENTE`, `POUPANCA`, `SALARIO`, `INVESTIMENTO`), `saldo` (`BigDecimal`)
-- Relacionamento `@ManyToOne` com `Cliente`
-
-**`Transacao`**
-- `id`, `tipo` (enum `TipoTransacao`: `DEPOSITO`, `SAQUE`), `valor` (`BigDecimal`), `dataHora` (`LocalDateTime`)
-- Relacionamento `@ManyToOne` com `Conta`
-
-### Diagrama de relacionamento
-
-```
-Cliente 1 ──── N Conta 1 ──── N Transacao
+```bash
+./mvnw test -Dtest=ContaServiceTest   # testes unitários, não precisam de banco
 ```
 
-### Decisões técnicas de modelagem
+## 🚀 Como rodar localmente
 
-- **`BigDecimal` em vez de `double`/`float`** para todos os valores monetários (`saldo`, `valor`), evitando erros de arredondamento em ponto flutuante — essencial para sistemas financeiros.
-- **`String` em vez de tipo numérico** para `cpf` e `numero` da conta, preservando zeros à esquerda e evitando operações matemáticas indevidas sobre identificadores.
-- **Enums (`TipoConta`, `TipoTransacao`)** em vez de `String` livre, garantindo que apenas valores válidos possam ser atribuídos — validado em tempo de compilação.
-- **`@Enumerated(EnumType.STRING)`** para persistir o nome do enum no banco (`"CORRENTE"`) em vez do índice numérico, tornando os dados mais legíveis e resilientes a mudanças na ordem dos valores.
-- **Relacionamento unidirecional entre `Transacao` e `Conta`** (sem lista de transações dentro de `Conta`) para evitar carregar um histórico potencialmente grande sempre que uma conta é consultada.
+**Pré-requisitos:** Java 21 e MySQL 8 rodando.
 
----
+```bash
+# 1. Clonar
+git clone https://github.com/diegoomarcelo/sistema-bancario-api.git
+cd sistema-bancario-api
 
-## Camada de persistência (Repository)
+# 2. Criar o banco
+mysql -u root -p -e "CREATE DATABASE sistema_bancario;"
 
-Todas as interfaces estendem `JpaRepository<Entidade, Long>`, herdando automaticamente métodos como `save`, `findById`, `findAll`, `deleteById`.
+# 3. Informar a senha do MySQL
+export DB_PASSWORD=sua_senha          # Windows (PowerShell): $env:DB_PASSWORD="sua_senha"
 
-Métodos customizados criados via **query methods** (o Spring Data JPA gera a query a partir do nome do método, sem SQL manual):
+# 4. Subir a aplicação (as tabelas são criadas pelo Hibernate)
+./mvnw spring-boot:run                # Windows: mvnw.cmd spring-boot:run
+```
 
-- `ClienteRepository.findByCpf(String cpf)`
-- `ContaRepository.findByClienteId(Long clienteId)`
-- `TransacaoRepository.findByContaId(Long contaId)`
+A API sobe em `http://localhost:8080`. Ajuste usuário e URL do banco em `src/main/resources/application.properties`, se necessário.
 
----
-
-## Regras de negócio (Service)
-
-### `ClienteService`
-- `criarCliente` — impede cadastro de CPF duplicado (verifica via `findByCpf` antes de salvar).
-- `buscarPorId` — lança exceção caso o cliente não exista.
-- `listarTodos`.
-
-### `ContaService`
-- `criarConta` — associa a conta a um cliente existente (validado via `ClienteService`).
-- `depositar` — valida valor positivo, atualiza saldo, registra a transação.
-- `sacar` — valida valor positivo, valida saldo suficiente, atualiza saldo, registra a transação.
-- Ambos os métodos de movimentação usam **`@Transactional`**, garantindo que a atualização do saldo e o registro da transação aconteçam como uma única operação atômica (rollback automático em caso de falha).
-
-### `TransacaoService`
-- `registrar` — cria e persiste um novo registro de transação.
-- `listarExtrato` — retorna o histórico de transações de uma conta.
-
----
-
-## Endpoints da API
-
-### Clientes
+## 🔌 Endpoints
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `POST` | `/clientes` | Cria um novo cliente |
-| `GET` | `/clientes` | Lista todos os clientes |
+| `POST` | `/clientes` | Cria um cliente |
+| `GET` | `/clientes` | Lista os clientes |
 | `GET` | `/clientes/{id}` | Busca um cliente por id |
+| `POST` | `/contas/clientes/{clienteId}` | Abre uma conta para o cliente |
+| `GET` | `/contas/clientes/{clienteId}` | Lista as contas do cliente |
+| `POST` | `/contas/{contaId}/depositar` | Deposita (corpo: valor numérico) |
+| `POST` | `/contas/{contaId}/sacar` | Saca (corpo: valor numérico) |
+| `GET` | `/contas/{contaId}/extrato` | Lista as transações da conta |
 
-### Contas
+## 🗺️ Próximos passos
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `POST` | `/contas/clientes/{clienteId}` | Cria uma conta para um cliente |
-| `GET` | `/contas/clientes/{clienteId}` | Lista as contas de um cliente |
-| `POST` | `/contas/{contaId}/depositar` | Realiza um depósito |
-| `POST` | `/contas/{contaId}/sacar` | Realiza um saque |
+- [ ] Migrar `ddl-auto=update` para Flyway ou Liquibase (controle de versão do schema).
+- [ ] Interface front-end em React consumindo a API.
 
-### Transações
+## 👤 Autor
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `/contas/{contaId}/extrato` | Lista o extrato (transações) de uma conta |
-
----
-
-## Validações implementadas
-
-- `@NotBlank` — campos de texto obrigatórios (nome, CPF, email, número da conta).
-- `@Email` — formato válido de e-mail.
-- `@NotNull` — campos obrigatórios não textuais (tipo de conta, valor, data/hora).
-- `@Column(unique = true)` — constraints de unicidade a nível de banco (CPF, número da conta), como última camada de proteção contra duplicidade.
-- `@Valid` nos controllers, acionando as validações da entidade antes de processar a requisição.
-
----
-
-## Desafios técnicos resolvidos durante o desenvolvimento
-
-1. **Serialização JSON em loop infinito**
-   O relacionamento bidirecional `Cliente ↔ Conta` causava recursão infinita ao converter para JSON (`Conta` mostra `Cliente`, que mostra suas `Conta`s, que mostram `Cliente`...). Resolvido com `@JsonManagedReference` (em `Cliente.contas`) e `@JsonBackReference` (em `Conta.cliente`), quebrando o ciclo de serialização.
-
-2. **Precisão de valores monetários**
-   Uso de `BigDecimal` com `precision`/`scale` definidos na coluna, e comparação de valores via `.compareTo()` (nunca `==` ou operadores relacionais diretos, que não funcionam como esperado para tipos objeto).
-
-3. **Consistência transacional**
-   Garantida com `@Transactional` nos métodos que envolvem múltiplas escritas no banco (atualizar saldo + registrar transação), evitando estados inconsistentes em caso de falha parcial.
-
-4. **Proteção de credenciais**
-   A senha do banco de dados não fica no código-fonte — é injetada via variável de ambiente (`${DB_PASSWORD}` no `application.properties`, configurada localmente na IDE), permitindo que o repositório seja público sem expor dados sensíveis.
-
----
-
-## Como rodar o projeto localmente
-
-1. Ter o MySQL instalado e rodando, com um banco criado:
-   ```sql
-   CREATE DATABASE sistema_bancario;
-   ```
-2. Configurar a variável de ambiente `DB_PASSWORD` com a senha do MySQL.
-3. Clonar o repositório e abrir no IntelliJ IDEA (ou outra IDE Java).
-4. Rodar a classe `SistemaBancarioApiApplication`.
-5. A aplicação inicia em `http://localhost:8080`, e as tabelas são criadas automaticamente pelo Hibernate (`ddl-auto=update`).
-
----
-
-## Testes realizados
-
-Toda a API foi validada manualmente via **HTTP Client do IntelliJ**, cobrindo o fluxo completo:
-
-- ✅ Criação de cliente (com bloqueio de CPF duplicado)
-- ✅ Criação de conta vinculada a um cliente
-- ✅ Depósito (validação de valor positivo, atualização de saldo)
-- ✅ Saque (validação de saldo suficiente, atualização de saldo)
-- ✅ Bloqueio de saque com saldo insuficiente
-- ✅ Extrato com histórico correto de transações
-
----
-
-## Próximos passos (evolução futura)
-
-- Testes automatizados (JUnit + Mockito) para a camada de serviço.
-- Tratamento global de exceções (`@ControllerAdvice`) para respostas de erro padronizadas (atualmente os erros de validação retornam stack trace bruto).
-- Possível interface front-end (React) consumindo a API.
-- Migração de `ddl-auto=update` para uma ferramenta de migração de schema (Flyway ou Liquibase), mais adequada para produção.
+**Diego Marcelo**, Desenvolvimento de Software e Dados
+[LinkedIn](https://linkedin.com/in/diegomarcelo) · [GitHub](https://github.com/diegoomarcelo) · diegoomarcelo@gmail.com
